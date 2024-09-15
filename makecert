@@ -4,9 +4,6 @@
 # Copyright (c) 2022-2024 Dr. Matthew Kisow. All rights reserved.
 # Dr. Matthew Kisow <mkisow@ccac.edu>
 
-# Enable erroring on un-bound (undefined) variables.
-set -u
-
 # Enable filename patterns that match no files to expand to a null string, rather than themselves.
 shopt -s nullglob
 
@@ -25,7 +22,7 @@ g_SCRIPT_LOCATION="${BASH_SOURCE[@]}"
 
 # (g_<color>_TEXT) - Variables used to control how output is displayed to the screen during script execution.
 g_RED_TEXT="" g_GREEN_TEXT="" g_YELLOW_TEXT="" g_BLUE_TEXT="" g_MAGENTA_TEXT="" g_CYAN_TEXT="" g_WHITE_TEXT="" g_RESET_ATTS=""  g_ALERT_TEXT=""
-if [[ -z TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
+if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
   g_RD_TEXT="$(tput setaf 1)$(tput bold)"
   g_GREEN_TEXT="$(tput setaf 2)$(tput bold)"
   g_YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
@@ -360,34 +357,39 @@ function warning ()
 # *************************** script specific functions ************************
 function makecerts ()
 {
+  # CREATE PRIVATE KEY
+  if [ ! -f star.kisow.org.privkey.pem ]; then
+    info "Creating private key star.kisow.org.privkey.pem"
+    cp "*.kisow.org_private_key.key" star.kisow.org.privkey.pem
+    rm "*.kisow.org_private_key.key"
+    chmod 600 star.kisow.org.privkey.pem
+  fi
+
   # CREATE WILDCARD CERTIFICATE
   if [ ! -f star.kisow.org.cert.pem ]; then
-    info "Creating star.kisow.org.cert.pem"
+    info "Creating certificate star.kisow.org.cert.pem"
     cp kisow.org_ssl_certificate.cer star.kisow.org.cert.pem
+    rm kisow.org_ssl_certificate.cer
   fi
 
   # CREATE INTERMEDIATE CERTIFICATE
   if [ ! -f star.kisow.org.chain.pem ]; then
-    info "Creating star.kisow.org.chain.pem"
+    info "Creating intermediate certificate chain star.kisow.org.chain.pem"
     cp "*.kisow.org_ssl_certificate_INTERMEDIATE.cer" star.kisow.org.chain.pem
+    rm "*.kisow.org_ssl_certificate_INTERMEDIATE.cer"
   fi
 
   # CREATE CERTIFICATE CHAIN
   if [ ! -f star.kisow.org.cert-chain.pem ]; then
-    info "Creating star.kisow.org.cert-chain.pem"
+    info "Creating certificate chain star.kisow.org.cert-chain.pem"
     cat star.kisow.org.cert.pem star.kisow.org.chain.pem > star.kisow.org.cert-chain.pem
   fi
 
   # CREATE FULL CHAIN
   if [ ! -f star.kisow.org.fullchain.pem ]; then
-    info "Creating star.kisow.org.fullchain.pem"
-    cat star.kisow.org.cert.pem star.kisow.org.chain.pem star.kisow.org.privkey.pem > star.kisow.org.fullchain.pem 
-  fi
-
-  # CREATE PRIVATE KEY
-  if [ ! -f star.kisow.org.privkey.pem ]; then
-    info "Creating star.kisow.org.privkey.pem"
-    cp "*.kisow.org_private_key.key" star.kisow.org.privkey.pem
+    info "Creating full certificate chain star.kisow.org.fullchain.pem"
+    cat star.kisow.org.cert.pem star.kisow.org.chain.pem star.kisow.org.privkey.pem > star.kisow.org.fullchain.pem
+    chmod 600 star.kisow.org.fullchain.pem
   fi
 
   # CREATE PFX/P12 CERTIFICATE
@@ -424,27 +426,32 @@ function updatesvrs ()
   info "    Creating certificate updater script."
   printf '#!/bin/bash\n\n' >> updater.sh
   printf "sleep 10s\n\n" >> updater.sh
-  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.cert.pem /etc/ssl/certs/star.kisow.org.cert.pem\n" >> updater.sh
-  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.chain.pem /etc/ssl/certs/star.kisow.org.cert-chain.pem\n" >> updater.sh
-  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.privkey.pem /etc/ssl/private/star.kisow.org.privkey.pem\n" >> updater.sh
-  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.fullchain.pem /etc/ssl/private/star.kisow.org.fullchain.pem\n" >> updater.sh
-  printf "systemctl restart nginx.service\n" >> updater.sh
+  printf "mv /home/mkisowa/star.kisow.org.cert.pem /etc/ssl/certs/star.kisow.org.cert.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/star.kisow.org.cert-chain.pem /etc/ssl/certs/star.kisow.org.cert-chain.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/star.kisow.org.privkey.pem /etc/ssl/private/star.kisow.org.privkey.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/star.kisow.org.fullchain.pem /etc/ssl/private/star.kisow.org.fullchain.pem\n" >> updater.sh
+  printf "if command -v haproxy &>/dev/null; then\n" >> updater.sh
+  printf "  systemctl restart haproxy.service\n" >> updater.sh
+  printf "fi\n"  >> updater.sh
+  printf "if command -v nginx &>/dev/null; then\n" >> updater.sh
+  printf "  systemctl restart nginx.service\n" >> updater.sh
+  printf "fi\n"  >> updater.sh
   printf "rm /home/mkisowa/updater.sh\n" >> updater.sh
   chmod +x updater.sh
 
   # Copy scripts and certificates to the source.
   sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" updater.sh mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/updater.sh
   sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" bootstrap.sh mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/bootstrap.sh
-  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.cert.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert.pem
-  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.chain.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert-chain.pem
-  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.privkey.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.privkey.pem
-  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.fullchain.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.fullchain.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.cert.pem mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.cert-chain.pem mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert-chain.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.privkey.pem mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.privkey.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.fullchain.pem mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.fullchain.pem
 
   # Run the SSH script
-  info "    Running certificate updatee script on g_ARG_SERVERNAME."
+  info "    Running certificate updatee script on $g_ARG_SERVERNAME."
   sshpass -pCh354vk!0010 ssh -f -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" mkisowa@$g_ARG_SERVERNAME '/bin/bash /home/mkisowa/bootstrap.sh'
   if [ $? -eq 0 ]; then
-    info "    TCPIP address updater script ran successfully."
+    info "    Certificate updater script ran successfully."
   fi
 
   # Cleanup after run.
@@ -461,14 +468,14 @@ function updatesvrs ()
 # *************************** script specific functions ************************
 
 # *************************** begin of script proper ***************************
+
 process_command_line_options "${@}"
 internal_consistency_option_checks
-
   # Check for the sshpass package required for this script.
   if command -v sshpass &>/dev/null; then
     info "sshpass is already installed."
   else
-    error "The sshpass package is not installed."
+    apt -y install sshpass -qq &>/dev/null
   fi
 
   # MAKECERTS

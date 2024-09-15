@@ -12,7 +12,7 @@ shopt -s nullglob
 
 # ************************* global variable definitions ************************
 g_PROGNAME="$(basename "${0}")"
-g_VERSION="0.0.1"
+g_VERSION="0.0.2"
 g_PROGRAM_NAME="makecert"
 g_PROGRAM_DESCRIPTION="A script used to convert the CA's certificate files into formats used by different services then upload them to the server."
 #g_SCRIPT_URL="https://raw.githubusercontent.com/DoctorKisow/CIT-254/main/hacking-labs"

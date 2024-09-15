@@ -15,7 +15,7 @@ g_PROGNAME="$(basename "${0}")"
 g_VERSION="0.0.2"
 g_PROGRAM_NAME="makecert"
 g_PROGRAM_DESCRIPTION="A script used to convert the CA's certificate files into formats used by different services then upload them to the server."
-#g_SCRIPT_URL="https://raw.githubusercontent.com/DoctorKisow/CIT-254/main/hacking-labs"
+g_SCRIPT_URL="https://raw.githubusercontent.com/DoctorKisow/makecert/main/makecert"
 g_COPYRIGHT_TEXT="Copyright (c) 2022-2024 Dr. Matthew Kisow. All rights reserved."
 g_AUTHOR_TEXT="Dr. Matthew Kisow"
 g_AUTHOR_EMAIL="mkisow@ccac.edu"
@@ -49,6 +49,10 @@ g_SCRIPT_PATH="`( cd \"$g_SCRIPT_PATH\" && pwd )`"
 
 # (g_ARG_<variable>) - Boolean values used to indicate which command line options are set during execution; the default for all values is 0.
 # WARNING: DO NOT MODIFY THESE VALUE(S)!
+g_ARG_MAKECERT=0
+g_ARG_UPDATESVR=0
+g_ARG_UPDATE=0
+g_ARG_SERVERNAME=""
 
 # **************************** basic script functions **************************
 # (cleanup_and_exit_with_code) - Function used to properly cleanup the enviornment after an error; the passed value are 1 (error) or 0 (normal).
@@ -358,84 +362,101 @@ function makecerts ()
 {
   # CREATE WILDCARD CERTIFICATE
   if [ ! -f star.kisow.org.cert.pem ]; then
+    info "Creating star.kisow.org.cert.pem"
     cp kisow.org_ssl_certificate.cer star.kisow.org.cert.pem
   fi
 
   # CREATE INTERMEDIATE CERTIFICATE
   if [ ! -f star.kisow.org.chain.pem ]; then
+    info "Creating star.kisow.org.chain.pem"
     cp "*.kisow.org_ssl_certificate_INTERMEDIATE.cer" star.kisow.org.chain.pem
   fi
 
   # CREATE CERTIFICATE CHAIN
   if [ ! -f star.kisow.org.cert-chain.pem ]; then
+    info "Creating star.kisow.org.cert-chain.pem"
     cat star.kisow.org.cert.pem star.kisow.org.chain.pem > star.kisow.org.cert-chain.pem
+  fi
+
+  # CREATE FULL CHAIN
+  if [ ! -f star.kisow.org.fullchain.pem ]; then
+    info "Creating star.kisow.org.fullchain.pem"
+    cat star.kisow.org.cert.pem star.kisow.org.chain.pem star.kisow.org.privkey.pem > star.kisow.org.fullchain.pem 
   fi
 
   # CREATE PRIVATE KEY
   if [ ! -f star.kisow.org.privkey.pem ]; then
+    info "Creating star.kisow.org.privkey.pem"
     cp "*.kisow.org_private_key.key" star.kisow.org.privkey.pem
   fi
 
   # CREATE PFX/P12 CERTIFICATE
+  info "Creating PFX/P12 Certificates"
   openssl pkcs12 -password pass:ch354vky -export -out star.kisow.org.pfx -inkey star.kisow.org.privkey.pem -in star.kisow.org.cert.pem -certfile star.kisow.org.chain.pem
   openssl pkcs12 -password pass:ch354vky -export -out star.kisow.org.p12 -inkey star.kisow.org.privkey.pem -in star.kisow.org.cert.pem -certfile star.kisow.org.chain.pem
 }
 
 function updatesvrs ()
 {
- ## Metasploitable3 (Linux)
-    info "  Updating the Metasploitable3 (Linux) VM networking."
-    sleep 5s
+  info "  Updating the certificates on $g_ARG_SERVERNAME."
+  sleep 5s
 
-    # Cleanup incase of a borked run.
-    if [[ -f "bootstrap.sh" ]]; then
-      info "    Cleaning up messy environment, removing bootstrap.sh script."
-      rm "${g_SCRIPT_PATH}/bootstrap_lin1404.sh"
-    fi
+  # Cleanup incase of a previous borked run.
+  if [[ -f "bootstrap.sh" ]]; then
+    info "    Cleaning up messy environment, removing bootstrap.sh script."
+    rm "${g_SCRIPT_PATH}/bootstrap.sh"
+  fi
 
-    # Cleanup incase of a borked run.
-    if [[ -f "${g_SCRIPT_PATH}/updater_lin1404.sh" ]]; then
-      info "    Cleaning up messy environment, removing updater_lin1404.sh script."
-      rm "${g_SCRIPT_PATH}/updater_lin1404.sh"
-    fi
+  # Cleanup incase of a previous borked run.
+  if [[ -f "${g_SCRIPT_PATH}/updater.sh" ]]; then
+    info "    Cleaning up messy environment, removing updater.sh script."
+    rm "${g_SCRIPT_PATH}/updater.sh"
+  fi
 
-    # Create bootstrap script that will call the updater script.
-    info "    Creating bootstrap script."
-    printf '#!/bin/bash\n\n' >> bootstrap_lin1404.sh
-    printf "echo vagrant | sudo -S nohup /home/vagrant/updater.sh &\n" >> bootstrap_lin1404.sh
-    printf "rm /home/vagrant/bootstrap.sh\n" >> bootstrap_lin1404.sh
-    chmod +x bootstrap_lin1404.sh
+  # Create bootstrap script that will call the updater script.
+  info "    Creating bootstrap script."
+  printf '#!/bin/bash\n\n' >> bootstrap.sh
+  printf "echo Ch354vk!0010 | sudo -S nohup /home/mkisowa/updater.sh &\n" >> bootstrap.sh
+  printf "rm /home/mkisowa/bootstrap.sh\n" >> bootstrap.sh
+  chmod +x bootstrap.sh
 
-    # Create the updater script based on default ip address and new onr entered.
-    info "    Creating TCPIP address updater script."
-    printf '#!/bin/bash\n\n' >> updater_lin1404.sh
-    printf "sleep 10s\n\n" >> updater_lin1404.sh
-    printf "sed -i -e 's/$g_LIN1404_DEFIP/$l_LIN1404_NEWIP/' /etc/network/interfaces\n" >> updater_lin1404.sh
-    printf "ifdown eth0 && ifup eth0\n" >> updater_lin1404.sh
-    printf "rm /home/vagrant/updater.sh\n" >> updater_lin1404.sh
-    chmod +x updater_lin1404.sh
+  # Create the updater script based on default ip address and new onr entered.
+  info "    Creating certificate updater script."
+  printf '#!/bin/bash\n\n' >> updater.sh
+  printf "sleep 10s\n\n" >> updater.sh
+  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.cert.pem /etc/ssl/certs/star.kisow.org.cert.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.chain.pem /etc/ssl/certs/star.kisow.org.cert-chain.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.privkey.pem /etc/ssl/private/star.kisow.org.privkey.pem\n" >> updater.sh
+  printf "mv /home/mkisowa/home/mkisowa/star.kisow.org.fullchain.pem /etc/ssl/private/star.kisow.org.fullchain.pem\n" >> updater.sh
+  printf "systemctl restart nginx.service\n" >> updater.sh
+  printf "rm /home/mkisowa/updater.sh\n" >> updater.sh
+  chmod +x updater.sh
 
-    # Copy scripts to the Metasploitable3 (Linux) VM.
-    sshpass -pvagrant scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" updater_lin1404.sh vagrant@$g_LIN1404_DEFIP:/home/vagrant/updater.sh
-    sshpass -pvagrant scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" bootstrap_lin1404.sh vagrant@$g_LIN1404_DEFIP:/home/vagrant/bootstrap.sh
+  # Copy scripts and certificates to the source.
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" updater.sh mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/updater.sh
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" bootstrap.sh mkisowa@$g_ARG_SERVERNAME:/home/mkisowa/bootstrap.sh
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.cert.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.chain.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.cert-chain.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.privkey.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.privkey.pem
+  sshpass -pCh354vk!0010 scp -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" star.kisow.org.fullchain.pem mkisowa@$gg_ARG_SERVERNAME:/home/mkisowa/star.kisow.org.fullchain.pem
 
-    # Run the SSH script
-    info "    Running TCPIP update script on Metasploitable3 (Linux)."
-    sshpass -pvagrant ssh -f -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" vagrant@$g_LIN1404_DEFIP '/bin/bash /home/vagrant/bootstrap.sh'
-    if [ $? -eq 0 ]; then
-      info "    TCPIP address updater script ran successfully."
-    fi
+  # Run the SSH script
+  info "    Running certificate updatee script on g_ARG_SERVERNAME."
+  sshpass -pCh354vk!0010 ssh -f -o "StrictHostKeyChecking no" -o "HostKeyAlgorithms=+ssh-dss" -o "LogLevel=ERROR" mkisowa@$g_ARG_SERVERNAME '/bin/bash /home/mkisowa/bootstrap.sh'
+  if [ $? -eq 0 ]; then
+    info "    TCPIP address updater script ran successfully."
+  fi
 
-    # Cleanup after run.
-    if [[ -f "${g_SCRIPT_PATH}/bootstrap_lin1404.sh" ]]; then
-      info "    Cleaning up removing bootstrap_lin1404.sh script."
-      rm "${g_SCRIPT_PATH}/bootstrap_lin1404.sh"
-    fi
+  # Cleanup after run.
+  if [[ -f "${g_SCRIPT_PATH}/bootstrap.sh" ]]; then
+    info "    Cleaning up removing bootstrap.sh script."
+    rm "${g_SCRIPT_PATH}/bootstrap.sh"
+  fi
 
-    if [[ -f "${g_SCRIPT_PATH}/updater_lin1404.sh" ]]; then
-      info "    Cleaning up removing updater_lin1404.sh script."
-      rm "${g_SCRIPT_PATH}/updater_lin1404.sh"
-    fi
+  if [[ -f "${g_SCRIPT_PATH}/updater.sh" ]]; then
+    info "    Cleaning up removing updater.sh script."
+    rm "${g_SCRIPT_PATH}/updater.sh"
+  fi
 }
 # *************************** script specific functions ************************
 
@@ -451,8 +472,13 @@ internal_consistency_option_checks
   fi
 
   # MAKECERTS
-  if ((g_ARG_==1)); then
-    purgedb
+  if ((g_ARG_MAKECERT==1)); then
+    makecerts
+  fi
+
+  # UPDARE SERVER
+  if ((g_ARG_UPDATESVR==1)); then
+    updatesvrs
   fi
 
 cleanup_and_exit_with_code 0

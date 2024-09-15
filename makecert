@@ -12,7 +12,7 @@ shopt -s nullglob
 
 # ************************* global variable definitions ************************
 g_PROGNAME="$(basename "${0}")"
-g_VERSION="0.0.2"
+g_VERSION="0.0.3"
 g_PROGRAM_NAME="makecert"
 g_PROGRAM_DESCRIPTION="A script used to convert the CA's certificate files into formats used by different services then upload them to the server."
 g_SCRIPT_URL="https://raw.githubusercontent.com/DoctorKisow/makecert/main/makecert"
@@ -25,7 +25,7 @@ g_SCRIPT_LOCATION="${BASH_SOURCE[@]}"
 
 # (g_<color>_TEXT) - Variables used to control how output is displayed to the screen during script execution.
 g_RED_TEXT="" g_GREEN_TEXT="" g_YELLOW_TEXT="" g_BLUE_TEXT="" g_MAGENTA_TEXT="" g_CYAN_TEXT="" g_WHITE_TEXT="" g_RESET_ATTS=""  g_ALERT_TEXT=""
-if [[ -v TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
+if [[ -z TERM && -n "${TERM}" && "${TERM}" != "dumb" ]]; then
   g_RD_TEXT="$(tput setaf 1)$(tput bold)"
   g_GREEN_TEXT="$(tput setaf 2)$(tput bold)"
   g_YELLOW_TEXT="$(tput setaf 3)$(tput bold)"
